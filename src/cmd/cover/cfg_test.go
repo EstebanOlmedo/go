@@ -56,13 +56,13 @@ func writeOutFileList(t *testing.T, infiles []string, outdir, tag string) ([]str
 	return outfs, outfilelist
 }
 
-func runPkgCover(t *testing.T, outdir string, tag string, incfg string, mode string, infiles []string, errExpected bool) ([]string, string, string) {
+func runPkgCover(t *testing.T, outdir string, tag string, incfg string, mode string, sparse bool, infiles []string, errExpected bool) ([]string, string, string) {
 	// Write the pkgcfg file.
 	outcfg := filepath.Join(outdir, "outcfg.txt")
 
 	// Form up the arguments and run the tool.
 	outfiles, outfilelist := writeOutFileList(t, infiles, outdir, tag)
-	args := []string{"-pkgcfg", incfg, "-mode=" + mode, "-var=var" + tag, "-outfilelist", outfilelist}
+	args := []string{"-pkgcfg", incfg, "-mode=" + mode, "-var=var" + tag, "-outfilelist", outfilelist, fmt.Sprintf("-sparse=%v",sparse)}
 	args = append(args, infiles...)
 	cmd := testenv.Command(t, testcover(t), args...)
 	if errExpected {
@@ -115,18 +115,27 @@ func TestCoverWithCfg(t *testing.T) {
 
 	scenarios := []struct {
 		mode, gran string
+		sparse     bool
 	}{
 		{
-			mode: "count",
-			gran: "perblock",
+			mode:   "count",
+			gran:   "perblock",
+			sparse: false,
 		},
 		{
-			mode: "set",
-			gran: "perfunc",
+			mode:   "set",
+			gran:   "perfunc",
+			sparse: false,
 		},
 		{
-			mode: "regonly",
-			gran: "perblock",
+			mode:   "regonly",
+			gran:   "perblock",
+			sparse: false,
+		},
+		{
+			mode:   "set",
+			gran:   "perblock",
+			sparse: true,
 		},
 	}
 
@@ -138,9 +147,10 @@ func TestCoverWithCfg(t *testing.T) {
 		pname := "a"
 		mode := scenario.mode
 		gran := scenario.gran
+		sparse := scenario.sparse
 		tag := mode + "_" + gran
 		incfg = writePkgConfig(t, instdira, tag, ppath, pname, gran)
-		ofs, outcfg, _ := runPkgCover(t, instdira, tag, incfg, mode,
+		ofs, outcfg, _ := runPkgCover(t, instdira, tag, incfg, mode, sparse,
 			pfiles("a"), false)
 		t.Logf("outfiles: %+v\n", ofs)
 
@@ -156,13 +166,21 @@ func TestCoverWithCfg(t *testing.T) {
 	// Do some error testing to ensure that various bad options and
 	// combinations are properly rejected.
 
-	// Expect error if config file inaccessible/unreadable.
+	// Expect error if sparse flag used with incorrect mode
 	mode := "atomic"
 	errExpected := true
 	tag := "errors"
-	_, _, errmsg := runPkgCover(t, instdira, tag, "/not/a/file", mode,
+	t.Logf("sparse with incorrect settings")
+	_, _, errmsg := runPkgCover(t, instdira, tag, incfg, mode, true,
 		pfiles("a"), errExpected)
-	want := "error reading pkgconfig file"
+	want := "sparse flag can only be used with set mode:"
+	if !strings.Contains(errmsg, want) {
+		t.Errorf("'sparse with incorrect settings' test: wanted: %s got %s", want, errmsg)
+	}
+	// Expect error if config file inaccessible/unreadable.
+	_, _, errmsg = runPkgCover(t, instdira, tag, "/not/a/file", mode, false,
+		pfiles("a"), errExpected)
+	want = "error reading pkgconfig file"
 	if !strings.Contains(errmsg, want) {
 		t.Errorf("'bad config file' test: wanted %s got %s", want, errmsg)
 	}
@@ -170,7 +188,7 @@ func TestCoverWithCfg(t *testing.T) {
 	// Expect err if config file contains unknown stuff.
 	t.Logf("mangling in config")
 	writeFile(t, incfg, []byte("blah=foo\n"))
-	_, _, errmsg = runPkgCover(t, instdira, tag, incfg, mode,
+	_, _, errmsg = runPkgCover(t, instdira, tag, incfg, mode, false,
 		pfiles("a"), errExpected)
 	want = "error reading pkgconfig file"
 	if !strings.Contains(errmsg, want) {
@@ -180,7 +198,7 @@ func TestCoverWithCfg(t *testing.T) {
 	// Expect error on empty config file.
 	t.Logf("writing empty config")
 	writeFile(t, incfg, []byte("\n"))
-	_, _, errmsg = runPkgCover(t, instdira, tag, incfg, mode,
+	_, _, errmsg = runPkgCover(t, instdira, tag, incfg, mode, false,
 		pfiles("a"), errExpected)
 	if !strings.Contains(errmsg, want) {
 		t.Errorf("'bad config file' test: wanted %s got %s", want, errmsg)

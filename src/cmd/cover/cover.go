@@ -71,6 +71,7 @@ var (
 	htmlOut     = flag.String("html", "", "generate HTML representation of coverage profile")
 	funcOut     = flag.String("func", "", "output coverage profile information for each function")
 	pkgcfg      = flag.String("pkgcfg", "", "enable full-package instrumentation mode using params from specified config file")
+	sparse      = flag.Bool("sparse", false, "instrument ommiting blocks that can be inferred from others")
 )
 
 var pkgconfig covcmd.CoverPkgConfig
@@ -165,6 +166,9 @@ func parseFlags() error {
 		if flag.NArg() == 0 {
 			return fmt.Errorf("missing source file(s)")
 		} else {
+			if *sparse && *mode != "set"{
+				return fmt.Errorf("-sparse flag can only be used with set mode: %s used", *mode)
+			}
 			if *pkgcfg != "" {
 				if *output != "" {
 					return fmt.Errorf("please use '-outfilelist' flag instead of '-o'")
@@ -254,6 +258,12 @@ type File struct {
 	mdb     *encodemeta.CoverageMetaDataBuilder
 	fn      Func
 	pkg     *Package
+}
+
+// change represents an insertion to be done in the source file
+type change struct {
+	pos int
+	new string
 }
 
 // findText finds text in the original source, starting at pos.
@@ -753,6 +763,7 @@ func (f *File) addCounters(pos, insertPos, blockEnd token.Pos, list []ast.Stmt, 
 	list = append([]ast.Stmt(nil), list...)
 	// We have a block (statement list), but it may have several basic blocks due to the
 	// appearance of statements that affect the flow of control.
+	var changes []change
 	for {
 		// Find first statement that affects flow of control (break, continue, if, etc.).
 		// It will be the last statement of this basic block.
@@ -795,7 +806,10 @@ func (f *File) addCounters(pos, insertPos, blockEnd token.Pos, list []ast.Stmt, 
 			end = blockEnd
 		}
 		if pos != end { // Can have no source to cover if e.g. blocks abut.
-			f.edit.Insert(f.offset(insertPos), f.newCounter(pos, end, last)+";")
+			changes = append(changes, change{
+				pos : f.offset(insertPos),
+				new : f.newCounter(pos,end, last) + ";",
+			})
 		}
 		list = list[last:]
 		if len(list) == 0 {
@@ -803,6 +817,14 @@ func (f *File) addCounters(pos, insertPos, blockEnd token.Pos, list []ast.Stmt, 
 		}
 		pos = list[0].Pos()
 		insertPos = pos
+	}
+	if *sparse {
+		// Only add the last change
+		f.edit.Insert(changes[len(changes) - 1].pos, changes[len(changes) - 1].new)
+		return
+	}
+	for _, ch := range changes {
+		f.edit.Insert(ch.pos, ch.new)
 	}
 }
 
