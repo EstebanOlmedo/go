@@ -685,10 +685,11 @@ OverlayLoop:
 				sum := sha256.Sum256([]byte(a.Package.ImportPath))
 				coverVar := fmt.Sprintf("goCover_%x_", sum[:6])
 				mode := a.Package.Internal.CoverMode
+				sparse := a.Package.Internal.CoverSparse
 				if mode == "" {
 					panic("covermode should be set at this point")
 				}
-				if newoutfiles, err := b.cover2(a, infiles, outfiles, coverVar, mode); err != nil {
+				if newoutfiles, err := b.cover2(a, infiles, outfiles, coverVar, mode, sparse); err != nil {
 					return err
 				} else {
 					outfiles = newoutfiles
@@ -2038,7 +2039,7 @@ func (b *Builder) cover(a *Action, dst, src string, varName string) error {
 // regular outputs (instrumented source files) the cover tool also
 // writes a separate file (appearing first in the list of outputs)
 // that will contain coverage counters and meta-data.
-func (b *Builder) cover2(a *Action, infiles, outfiles []string, varName string, mode string) ([]string, error) {
+func (b *Builder) cover2(a *Action, infiles, outfiles []string, varName string, mode string, sparse bool) ([]string, error) {
 	pkgcfg := a.Objdir + "pkgcfg.txt"
 	covoutputs := a.Objdir + "coveroutfiles.txt"
 	odir := filepath.Dir(outfiles[0])
@@ -2052,6 +2053,7 @@ func (b *Builder) cover2(a *Action, infiles, outfiles []string, varName string, 
 		"-mode", mode,
 		"-var", varName,
 		"-outfilelist", covoutputs,
+		fmt.Sprintf("-sparse=%v", sparse),
 	}
 	args = append(args, infiles...)
 	if err := b.run(a, a.Objdir, "cover "+a.Package.ImportPath, nil,

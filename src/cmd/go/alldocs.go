@@ -143,6 +143,11 @@
 //		the patterns. The default is to apply coverage analysis to
 //		packages in the main Go module. See 'go help packages' for a
 //		description of package patterns.  Sets -cover.
+//	-coversparse
+//		works only for runtime coverage, if set not all blocks will be instrumented
+//		directly in the code, but recovered with the information of others. To recover
+//		the correct data 'go tool covdata' should run with 'clean' and 'src' flags.
+//		Sets -cover.
 //	-v
 //		print the names of packages as they are compiled.
 //	-work

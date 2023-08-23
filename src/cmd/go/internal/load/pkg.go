@@ -231,6 +231,7 @@ type PackageInternal struct {
 	CoverMode         string               // preprocess Go source files with the coverage tool in this mode
 	CoverVars         map[string]*CoverVar // variables created by coverage analysis
 	CoverageCfg       string               // coverage info config file path (passed to compiler)
+	CoverSparse       bool                 // tell cover tool to work in sparse mode
 	OmitDebug         bool                 // tell linker not to write debug information
 	GobinSubdir       bool                 // install target would be subdir of GOBIN
 	BuildInfo         *debug.BuildInfo     // add this info to package main
@@ -3490,6 +3491,7 @@ func SelectCoverPackages(roots []*Package, match []func(*Package) bool, op strin
 
 		// Mark package for instrumentation.
 		p.Internal.CoverMode = cmode
+		p.Internal.CoverSparse = cfg.BuildCoverSparse
 		covered = append(covered, p)
 
 		// Force import of sync/atomic into package if atomic mode.
