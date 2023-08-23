@@ -23,6 +23,8 @@ var pkgpatflag = flag.String("pkg", "", "Restrict output to package(s) matching 
 var cpuprofileflag = flag.String("cpuprofile", "", "Write CPU profile to specified file")
 var memprofileflag = flag.String("memprofile", "", "Write memory profile to specified file")
 var memprofilerateflag = flag.Int("memprofilerate", 0, "Set memprofile sampling rate to value")
+var restoreflag = flag.Bool("restore", false, "Clean information before giving the report ")
+var inputsrc = flag.String("src", "", "Input dirs of source files (for restore)")
 
 var matchpkg func(name string) bool
 
@@ -196,6 +198,16 @@ func main() {
 	} else {
 		// Not doing memory profiling; disable it entirely.
 		runtime.MemProfileRate = 0
+	}
+	if *restoreflag {
+		if *inputsrc == "" {
+			fatal("inputsrc should be provided when -restore is used")
+		}
+		var err error
+		op, err = makeCleanerOp(op, *inputsrc)
+		if err != nil {
+			fatal("%v", err)
+		}
 	}
 
 	// Mode-dependent setup.

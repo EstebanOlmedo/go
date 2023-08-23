@@ -150,11 +150,15 @@ type state struct {
 	exedir1  string
 	exedir2  string
 	exedir3  string
+	exedir4  string
+	exedir5  string
 	exepath1 string
 	exepath2 string
 	exepath3 string
+	exepath4 string
+	exepath5 string
 	tool     string
-	outdirs  [4]string
+	outdirs  [6]string
 }
 
 const debugWorkDir = false
@@ -183,11 +187,15 @@ func TestCovTool(t *testing.T) {
 	flags := []string{"-covermode=atomic"}
 	s.exepath3, s.exedir3 = buildProg(t, "prog1", dir, "atomic", flags)
 
+	flags = []string{"-coversparse=true"}
+	s.exepath4, s.exedir4 = buildProg(t, "inf1", dir, "nocoversparse", nil)
+	s.exepath5, s.exedir5 = buildProg(t, "inf1", dir, "coversparse", flags)
+
 	// Reuse unit test executable as tool to be tested.
 	s.tool = testcovdata(t)
 
 	// Create a few coverage output dirs.
-	for i := 0; i < 4; i++ {
+	for i := 0; i < 6; i++ {
 		d := filepath.Join(dir, fmt.Sprintf("covdata%d", i))
 		s.outdirs[i] = d
 		if err := os.Mkdir(d, 0777); err != nil {
@@ -224,6 +232,24 @@ func TestCovTool(t *testing.T) {
 					t.Fatalf("instrumented run error: %v", err)
 				}
 			}
+		}
+	}
+	//   <tmp>/covdata4   -- inf1.go compiled -cover
+	//   <tmp>/covdata5   -- inf1.go compiled -coversparse
+	for i := 0; i < 2; i++ {
+		exepath := s.exepath4
+		if i != 0 {
+			exepath = s.exepath5
+		}
+		args := []string{}
+		cmd := testenv.Command(t, exepath, args...)
+		cmd.Env = append(cmd.Env, "GOCOVERDIR="+s.outdirs[4+i])
+		b, err := cmd.CombinedOutput()
+		if len(b) != 0 {
+			t.Logf("## instrumented run output:\n%s", b)
+		}
+		if err != nil {
+			t.Fatalf("instrumented run error: %v %d", err, 4+i)
 		}
 	}
 
@@ -271,6 +297,10 @@ func TestCovTool(t *testing.T) {
 	t.Run("CounterClash", func(t *testing.T) {
 		t.Parallel()
 		testCounterClash(t, s)
+	})
+	t.Run("TestClean", func(t *testing.T) {
+		t.Parallel()
+		testCleaner(t, s, "testdata/inf1.go")
 	})
 	t.Run("TestEmpty", func(t *testing.T) {
 		t.Parallel()
@@ -344,6 +374,46 @@ func testDump(t *testing.T, s state) {
 		}
 	}
 	if bad {
+		dumplines(lines)
+	}
+}
+
+func testCleaner(t *testing.T, s state, srcFilePath string) {
+	// Run the dumper on the generated directories. Both must output the
+	// same information
+	dargs := []string{"-pkg=" + mainPkgPath, "-i=" + s.outdirs[4]}
+	linesNoSparse := runToolOp(t, s, "debugdump", dargs)
+
+	dargs = []string{"-pkg=" + mainPkgPath, "-i=" + s.outdirs[5]}
+	dargs = append(dargs, "-clean", "-src="+srcFilePath)
+	linesSparse := runToolOp(t, s, "debugdump", dargs)
+	findPkgPathIdx := func(lines []string) int {
+		for i, line := range lines {
+			if strings.Contains(line, "Package path:") {
+				return i
+			}
+		}
+		return 0
+	}
+
+	// In the first lines the reports can be different, ommit this lines
+	linesNoSparse = linesNoSparse[findPkgPathIdx(linesNoSparse):]
+	linesSparse = linesSparse[findPkgPathIdx(linesSparse):]
+
+	bad := len(linesNoSparse) != len(linesSparse)
+	for i := 0; i < len(linesNoSparse); i++ {
+		if linesNoSparse[i] != linesSparse[i] {
+			t.Errorf("difference between sparsed and non sparsed output")
+			bad = true
+			break
+		}
+	}
+
+	if bad {
+		lines := []string{"Want:"}
+		lines = append(lines, linesSparse...)
+		lines = append(lines, "Have:")
+		lines = append(lines, linesNoSparse...)
 		dumplines(lines)
 	}
 }
