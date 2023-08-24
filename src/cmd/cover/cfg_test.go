@@ -167,16 +167,17 @@ func TestCoverWithCfg(t *testing.T) {
 	// combinations are properly rejected.
 
 	// Expect error if sparse flag used with incorrect mode
-	mode := "atomic"
+	mode := "count"
 	errExpected := true
 	tag := "errors"
 	t.Logf("sparse with incorrect settings")
 	_, _, errmsg := runPkgCover(t, instdira, tag, incfg, mode, true,
 		pfiles("a"), errExpected)
-	want := "sparse flag can only be used with set mode:"
+	want := "sparse flag can only be used with set/atomic mode:"
 	if !strings.Contains(errmsg, want) {
 		t.Errorf("'sparse with incorrect settings' test: wanted: %s got %s", want, errmsg)
 	}
+	mode = "atomic"
 	// Expect error if config file inaccessible/unreadable.
 	_, _, errmsg = runPkgCover(t, instdira, tag, "/not/a/file", mode, false,
 		pfiles("a"), errExpected)

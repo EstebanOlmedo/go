@@ -166,8 +166,8 @@ func parseFlags() error {
 		if flag.NArg() == 0 {
 			return fmt.Errorf("missing source file(s)")
 		} else {
-			if *sparse && *mode != "set"{
-				return fmt.Errorf("-sparse flag can only be used with set mode: %s used", *mode)
+			if *sparse && *mode != "set" && *mode != "atomic"{
+				return fmt.Errorf("-sparse flag can only be used with set/atomic mode: %s used", *mode)
 			}
 			if *pkgcfg != "" {
 				if *output != "" {
